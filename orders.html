@@ -1,0 +1,462 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Pedidos – Panel (Lectura Fácil)</title>
+<style>
+  :root{
+    --bg:#f5f7fb; --fg:#111827; --muted:#6b7280; --line:#e5e7eb;
+    --blue:#0a7cff; --ghost:#eef2f7; --ghostfg:#0a2850;
+    --red:#ef4444; --orange:#fb923c; --green:#22c55e;
+    --redbg:#fff1f2; --orangebg:#fff7ed; --greenbg:#ecfdf5;
+  }
+  body{margin:0;background:var(--bg);color:var(--fg);font-family:system-ui,Segoe UI,Roboto,Helvetica,Arial}
+  .wrap{max-width:760px;margin:1rem auto;padding:1rem}
+  h1{font-size:1.6rem;margin:.5rem 0 1rem;text-align:center}
+
+  input[type="password"],input[type="text"],select{
+    padding:.7rem .8rem;border:1px solid #cbd5e1;border-radius:12px;font-size:1rem;background:#fff
+  }
+  button{padding:.75rem 1rem;border-radius:12px;border:0;background:var(--blue);color:#fff;cursor:pointer;font-size:1rem}
+  button.secondary{background:var(--ghost);color:var(--ghostfg);border:1px solid #d8dee6}
+  .muted{color:var(--muted)}
+  .hidden{display:none}
+
+  .toolbar{display:flex;flex-wrap:wrap;gap:.6rem;justify-content:space-between;align-items:center;margin:0 0 .75rem}
+  .filters{display:flex;flex-wrap:wrap;gap:.6rem}
+  .stats{display:flex;flex-wrap:wrap;gap:.6rem;margin:.5rem 0 1rem}
+  .stat{background:#fff;border:1px solid var(--line);border-radius:12px;padding:.6rem .8rem;font-size:.95rem}
+  .stat b{font-variant-numeric:tabular-nums}
+
+  .cards{display:flex;flex-direction:column;gap:1rem}
+  .card{
+    background:#fff;border-radius:16px;border:1px solid var(--line);box-shadow:0 6px 16px rgba(0,0,0,.06);
+    padding:1rem 1rem 1.1rem;transition:background .2s,border-left .2s; border-left:6px solid var(--blue)
+  }
+  .status-red{background:var(--redbg);border-left-color:var(--red)}
+  .status-orange{background:var(--orangebg);border-left-color:var(--orange)}
+  .status-green{background:var(--greenbg);border-left-color:var(--green)}
+
+  .head{display:flex;justify-content:space-between;align-items:baseline;gap:.75rem;margin-bottom:.2rem}
+  .order-id{font-size:1.15rem;font-weight:800;letter-spacing:.2px}
+  .order-date{font-size:.95rem;color:var(--muted)}
+
+  .info{display:grid;grid-template-columns:1fr;gap:.25rem;margin:.4rem 0 .2rem}
+  .line{font-size:1.05rem}
+  .label{color:var(--muted);margin-right:.35rem}
+
+  .sizes{display:grid;grid-template-columns:repeat(6, minmax(0,1fr));gap:.4rem;margin:.5rem 0}
+  .sizes .chip{
+    background:#fff;border:1px solid var(--line);border-radius:10px;padding:.4rem .5rem;text-align:center;
+    font-size:.95rem
+  }
+  .total{display:flex;justify-content:flex-end;margin-top:.2rem;font-size:1.15rem;font-weight:800}
+
+  .actions{
+    display:flex;flex-wrap:wrap;gap:.5rem;justify-content:space-between;align-items:center;margin-top:.9rem
+  }
+  .toggles{display:flex;flex-wrap:wrap;gap:1rem;align-items:center}
+  .check{accent-color:var(--blue);transform:scale(1.2)}
+  .btns{display:flex;gap:.5rem}
+  .btn-delete{background:var(--red)}
+  .btn-edit{background:#0ea5e9}
+
+  .gate{display:flex;gap:.6rem;flex-wrap:wrap;justify-content:center;align-items:center;margin-bottom:1rem}
+
+  .modal-backdrop{position:fixed;inset:0;background:rgba(0,0,0,.35);display:none;align-items:center;justify-content:center;padding:1rem;z-index:50}
+  .modal{max-width:720px;width:100%;background:#fff;border-radius:16px;box-shadow:0 10px 30px rgba(0,0,0,.25);overflow:hidden;border:1px solid var(--line)}
+  .modal header{padding:1rem 1.25rem;border-bottom:1px solid var(--line);font-weight:800;font-size:1.15rem}
+  .modal .content{padding:1rem 1.25rem;display:grid;gap:.9rem}
+  .modal .grid-2{display:grid;grid-template-columns:1fr 1fr;gap:.75rem}
+  .modal label{font-size:.95rem;font-weight:700}
+  .modal input,.modal select{width:100%;padding:.6rem .7rem;border:1px solid #cbd5e1;border-radius:10px;font-size:1rem}
+  .modal .sizes{display:grid;grid-template-columns:repeat(3,1fr);gap:.5rem}
+  .modal .sizebox{display:flex;gap:.45rem;align-items:center}
+  .modal .sizebox input{width:90px;text-align:center}
+  .modal footer{padding:1rem 1.25rem;border-top:1px solid var(--line);display:flex;gap:.6rem;justify-content:flex-end}
+  @media (max-width:720px){ .modal .grid-2{grid-template-columns:1fr} .modal .sizes{grid-template-columns:repeat(2,1fr)} }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Pedidos – Panel</h1>
+
+  <!-- Password Gate (no password shown) -->
+  <div id="gate" class="gate">
+    <input id="passwordInput" type="password" placeholder="Contraseña" />
+    <button id="unlock">Entrar</button>
+  </div>
+
+  <div id="panel" class="hidden">
+    <!-- Toolbar -->
+    <div class="toolbar">
+      <div class="filters">
+        <select id="filterPaid">
+          <option value="all">Pago: Todos</option>
+          <option value="paid">Pagado</option>
+          <option value="unpaid">No pagado</option>
+        </select>
+        <select id="filterDelivered">
+          <option value="all">Entrega: Todos</option>
+          <option value="delivered">Entregado</option>
+          <option value="undelivered">No entregado</option>
+        </select>
+        <select id="filterState">
+          <option value="">Estado: Todos</option>
+          <option>Alabama</option><option>Alaska</option><option>Arizona</option><option>Arkansas</option>
+          <option>California</option><option>Colorado</option><option>Connecticut</option><option>Delaware</option>
+          <option>Florida</option><option>Georgia</option><option>Hawaii</option><option>Idaho</option>
+          <option>Illinois</option><option>Indiana</option><option>Iowa</option><option>Kansas</option>
+          <option>Kentucky</option><option>Louisiana</option><option>Maine</option><option>Maryland</option>
+          <option>Massachusetts</option><option>Michigan</option><option>Minnesota</option><option>Mississippi</option>
+          <option>Missouri</option><option>Montana</option><option>Nebraska</option><option>Nevada</option>
+          <option>New Hampshire</option><option>New Jersey</option><option>New Mexico</option><option>New York</option>
+          <option>North Carolina</option><option>North Dakota</option><option>Ohio</option><option>Oklahoma</option>
+          <option>Oregon</option><option>Pennsylvania</option><option>Rhode Island</option><option>South Carolina</option>
+          <option>South Dakota</option><option>Tennessee</option><option>Texas</option><option>Utah</option>
+          <option>Vermont</option><option>Virginia</option><option>Washington</option><option>West Virginia</option>
+          <option>Wisconsin</option><option>Wyoming</option><option>Puerto Rico</option>
+        </select>
+        <input id="searchCoord" type="text" placeholder="Buscar coordinador…" />
+        <select id="sortBy">
+          <option value="date_desc">Ordenar: Fecha ↓</option>
+          <option value="date_asc">Fecha ↑</option>
+          <option value="total_desc">Total camisas ↓</option>
+          <option value="total_asc">Total camisas ↑</option>
+          <option value="amount_desc">Total $ ↓</option>
+          <option value="amount_asc">Total $ ↑</option>
+          <option value="coord_asc">Coordinador A–Z</option>
+          <option value="coord_desc">Coordinador Z–A</option>
+          <option value="state_asc">Estado A–Z</option>
+          <option value="state_desc">Estado Z–A</option>
+          <option value="status">Estado de pago/entrega</option>
+        </select>
+        <button id="clearFilters" class="secondary">Limpiar</button>
+      </div>
+      <div style="display:flex;gap:.6rem;flex-wrap:wrap">
+        <button id="reload" class="secondary">Recargar</button>
+        <button id="lock" class="secondary">Bloquear</button>
+      </div>
+    </div>
+
+    <!-- Summary -->
+    <div class="stats" id="summary">
+      <div class="stat">Total pedidos: <b id="sumOrders">0</b></div>
+      <div class="stat">Pagados: <b id="sumPaid">0</b></div>
+      <div class="stat">Entregados: <b id="sumDelivered">0</b></div>
+      <div class="stat">Por entregar: <b id="sumToDeliver">0</b></div>
+      <div class="stat">Total camisas: <b id="sumShirts">0</b></div>
+      <div class="stat">Total $: <b id="sumAmount">$0.00</b></div>
+    </div>
+
+    <!-- Cards -->
+    <div id="cards" class="cards"></div>
+  </div>
+</div>
+
+<!-- Modal Editor -->
+<div id="modalBackdrop" class="modal-backdrop">
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="editTitle">
+    <header id="editTitle">Editar pedido</header>
+    <div class="content">
+      <div class="grid-2">
+        <div>
+          <label for="edCoordinator">Coordinador</label>
+          <input id="edCoordinator" type="text" />
+        </div>
+        <div>
+          <label for="edPhone">Teléfono</label>
+          <input id="edPhone" type="text" />
+        </div>
+        <div>
+          <label for="edState">Estado</label>
+          <select id="edState">
+            <option>Alabama</option><option>Alaska</option><option>Arizona</option><option>Arkansas</option>
+            <option>California</option><option>Colorado</option><option>Connecticut</option><option>Delaware</option>
+            <option>Florida</option><option>Georgia</option><option>Hawaii</option><option>Idaho</option>
+            <option>Illinois</option><option>Indiana</option><option>Iowa</option><option>Kansas</option>
+            <option>Kentucky</option><option>Louisiana</option><option>Maine</option><option>Maryland</option>
+            <option>Massachusetts</option><option>Michigan</option><option>Minnesota</option><option>Mississippi</option>
+            <option>Missouri</option><option>Montana</option><option>Nebraska</option><option>Nevada</option>
+            <option>New Hampshire</option><option>New Jersey</option><option>New Mexico</option><option>New York</option>
+            <option>North Carolina</option><option>North Dakota</option><option>Ohio</option><option>Oklahoma</option>
+            <option>Oregon</option><option>Pennsylvania</option><option>Rhode Island</option><option>South Carolina</option>
+            <option>South Dakota</option><option>Tennessee</option><option>Texas</option><option>Utah</option>
+            <option>Vermont</option><option>Virginia</option><option>Washington</option><option>West Virginia</option>
+            <option>Wisconsin</option><option>Wyoming</option><option>Puerto Rico</option>
+          </select>
+        </div>
+        <div>
+          <label for="edAddress">Dirección</label>
+          <input id="edAddress" type="text" />
+        </div>
+      </div>
+
+      <div>
+        <label>Tallas (cantidades)</label>
+        <div class="sizes">
+          <div class="sizebox"><span>S</span><input id="edS" type="number" min="0" value="0"></div>
+          <div class="sizebox"><span>M</span><input id="edM" type="number" min="0" value="0"></div>
+          <div class="sizebox"><span>L</span><input id="edL" type="number" min="0" value="0"></div>
+          <div class="sizebox"><span>XL</span><input id="edXL" type="number" min="0" value="0"></div>
+          <div class="sizebox"><span>2XL</span><input id="edXXL" type="number" min="0" value="0"></div>
+          <div class="sizebox"><span>3XL</span><input id="edXXXL" type="number" min="0" value="0"></div>
+        </div>
+      </div>
+
+      <div class="grid-2">
+        <div>
+          <label for="edPrice">Precio por camisa (USD)</label>
+          <input id="edPrice" type="number" min="0" step="0.01" />
+        </div>
+        <div>
+          <label>Total calculado</label>
+          <input id="edTotalCalc" type="text" disabled />
+        </div>
+      </div>
+    </div>
+    <footer>
+      <button id="btnCancel" class="secondary">Cancelar</button>
+      <button id="btnSave" class="secondary">Guardar</button>
+    </footer>
+  </div>
+</div>
+
+<script>
+const API_BASE = "https://api.salcedo.app";
+const ORDERS_URL = API_BASE + "/orders";
+const API_KEY = "4Tg7M1Qp9eXc!5zLw2nY@0Rb"; // backend key (no se muestra en UI)
+const GATE_PASSWORD = "password";          // NO se muestra en la página
+const LS_KEY = "iurd_orders_password";
+
+let ALL_ORDERS = [];
+let VIEW_ORDERS = [];
+let editingId = null;
+
+/* Utils */
+const money = n => Number(n||0).toLocaleString(undefined,{style:'currency',currency:'USD'});
+const norm  = s => String(s||"").toLowerCase();
+const statusClass = o => {
+  const paid = String(o.confirmed).toLowerCase()==="true";
+  const del  = String(o.delivered).toLowerCase()==="true";
+  if(paid && del) return "status-green";
+  if(paid && !del) return "status-orange";
+  return "status-red";
+};
+
+/* Gate */
+const getPw =()=>localStorage.getItem(LS_KEY)||"";
+const setPw =p=>localStorage.setItem(LS_KEY,p);
+const clrPw =()=>localStorage.removeItem(LS_KEY);
+const setUI = a => { gate.classList.toggle('hidden',a); panel.classList.toggle('hidden',!a); };
+unlock.onclick = async ()=>{
+  const pw = passwordInput.value.trim();
+  if(pw===GATE_PASSWORD){ setPw(pw); setUI(true); await refresh(); }
+  else alert("Contraseña incorrecta.");
+};
+lock.onclick   = ()=>{ clrPw(); setUI(false); };
+
+/* API */
+async function apiGetOrders(){
+  const r = await fetch(ORDERS_URL,{headers:{"X-API-Key":API_KEY}});
+  if(!r.ok) throw new Error(await r.text());
+  return r.json();
+}
+async function apiPatchRow(id, patch){
+  const r = await fetch(`${ORDERS_URL}/${id}`,{method:"PATCH",headers:{"X-API-Key":API_KEY,"Content-Type":"application/json"},body:JSON.stringify(patch)});
+  if(!r.ok) throw new Error(await r.text());
+  return r.json();
+}
+async function apiDeleteRow(id){
+  const r = await fetch(`${ORDERS_URL}/${id}`,{method:"DELETE",headers:{"X-API-Key":API_KEY}});
+  if(!r.ok) throw new Error(await r.text());
+  return r.json();
+}
+
+/* Render */
+function cardHtml(o){
+  const paid = String(o.confirmed).toLowerCase()==="true";
+  const del  = String(o.delivered).toLowerCase()==="true";
+  return `
+  <div class="card ${statusClass(o)}" data-id="${o.row_id}">
+    <div class="head">
+      <div class="order-id">Pedido #${o.row_id}</div>
+      <div class="order-date">${new Date(o.timestamp).toLocaleString()}</div>
+    </div>
+
+    <div class="info">
+      <div class="line"><span class="label">Coordinador:</span> <strong>${o.coordinator}</strong></div>
+      <div class="line"><span class="label">Teléfono:</span> ${o.phone}</div>
+      <div class="line"><span class="label">Dirección:</span> ${o.address}</div>
+      <div class="line"><span class="label">Estado:</span> ${o.state}</div>
+    </div>
+
+    <div class="sizes">
+      <div class="chip">S: <b>${o.S}</b></div>
+      <div class="chip">M: <b>${o.M}</b></div>
+      <div class="chip">L: <b>${o.L}</b></div>
+      <div class="chip">XL: <b>${o.XL}</b></div>
+      <div class="chip">2XL: <b>${o.XXL}</b></div>
+      <div class="chip">3XL: <b>${o.XXXL}</b></div>
+    </div>
+
+    <div class="total">Total camisas: ${o.total} — <span>${money(o.total_cost)}</span></div>
+
+    <div class="actions">
+      <div class="toggles">
+        <label><input type="checkbox" class="check chk-confirm" ${paid?'checked':''}> Pagado</label>
+        <label><input type="checkbox" class="check chk-deliver" ${del?'checked':''}> Entregado</label>
+      </div>
+      <div class="btns">
+        <button class="btn-edit">Editar</button>
+        <button class="btn-delete">Eliminar</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+function render(){
+  cards.innerHTML = VIEW_ORDERS.map(cardHtml).join("");
+
+  const totalOrders = VIEW_ORDERS.length;
+  const paidCount   = VIEW_ORDERS.filter(o=>String(o.confirmed).toLowerCase()==="true").length;
+  const delCount    = VIEW_ORDERS.filter(o=>String(o.delivered).toLowerCase()==="true").length;
+  const toDeliver   = Math.max(0, paidCount - delCount);
+  const tshirts     = VIEW_ORDERS.reduce((s,o)=>s+(+o.total||0),0);
+  const amount      = VIEW_ORDERS.reduce((s,o)=>s+(+o.total_cost||0),0);
+
+  sumOrders.textContent   = totalOrders;
+  sumPaid.textContent     = paidCount;
+  sumDelivered.textContent= delCount;
+  sumToDeliver.textContent= toDeliver;
+  sumShirts.textContent   = tshirts;
+  sumAmount.textContent   = money(amount);
+}
+
+/* Filters / sort */
+function applyFilters(){
+  const paid = filterPaid.value, delivered = filterDelivered.value, state = filterState.value.trim(), q = norm(searchCoord.value);
+  VIEW_ORDERS = ALL_ORDERS.filter(o=>{
+    const isPaid = String(o.confirmed).toLowerCase()==="true";
+    const isDel  = String(o.delivered).toLowerCase()==="true";
+    if(paid==="paid" && !isPaid) return false;
+    if(paid==="unpaid" && isPaid) return false;
+    if(delivered==="delivered" && !isDel) return false;
+    if(delivered==="undelivered" && isDel) return false;
+    if(state && String(o.state)!==state) return false;
+    if(q && !norm(o.coordinator).includes(q)) return false;
+    return true;
+  });
+}
+function applySort(){
+  const sort = sortBy.value;
+  const rank = o => (String(o.confirmed).toLowerCase()==="true" ? (String(o.delivered).toLowerCase()==="true"?0:1) : 2);
+  VIEW_ORDERS.sort((a,b)=>{
+    switch(sort){
+      case "date_desc":   return new Date(b.timestamp)-new Date(a.timestamp);
+      case "date_asc":    return new Date(a.timestamp)-new Date(b.timestamp);
+      case "total_desc":  return (+b.total||0)-(+a.total||0);
+      case "total_asc":   return (+a.total||0)-(+b.total||0);
+      case "amount_desc": return (+b.total_cost||0)-(+a.total_cost||0);
+      case "amount_asc":  return (+a.total_cost||0)-(+b.total_cost||0);
+      case "coord_asc":   return String(a.coordinator).localeCompare(String(b.coordinator));
+      case "coord_desc":  return String(b.coordinator).localeCompare(String(a.coordinator));
+      case "state_asc":   return String(a.state).localeCompare(String(b.state));
+      case "state_desc":  return String(b.state).localeCompare(String(a.state));
+      case "status":      return rank(a)-rank(b) || (new Date(b.timestamp)-new Date(a.timestamp));
+      default: return 0;
+    }
+  });
+}
+["filterPaid","filterDelivered","filterState","searchCoord","sortBy"].forEach(id=>{
+  document.getElementById(id).addEventListener("input", ()=>{ applyFilters(); applySort(); render(); });
+});
+clearFilters.onclick = ()=>{
+  filterPaid.value="all"; filterDelivered.value="all"; filterState.value="";
+  searchCoord.value=""; sortBy.value="date_desc";
+  applyFilters(); applySort(); render();
+};
+
+/* Data */
+async function refresh(){ const data = await apiGetOrders(); ALL_ORDERS = data.orders||[]; applyFilters(); applySort(); render(); }
+reload.onclick = refresh;
+
+/* Card actions (toggle, delete, edit) */
+document.addEventListener("change", async e=>{
+  const card = e.target.closest(".card"); if(!card) return;
+  const id = card.dataset.id;
+  if(e.target.classList.contains("chk-confirm") || e.target.classList.contains("chk-deliver")){
+    const paid = card.querySelector(".chk-confirm").checked;
+    const del  = card.querySelector(".chk-deliver").checked;
+    try{
+      if(e.target.classList.contains("chk-confirm")) await apiPatchRow(id,{confirmed:paid});
+      if(e.target.classList.contains("chk-deliver")) await apiPatchRow(id,{delivered:del});
+      const idx = ALL_ORDERS.findIndex(o=>String(o.row_id)===String(id));
+      if(idx>=0){ ALL_ORDERS[idx].confirmed = paid; ALL_ORDERS[idx].delivered = del; }
+      applyFilters(); applySort(); render();
+    }catch{ alert("Error al actualizar estado."); e.target.checked=!e.target.checked; }
+  }
+});
+document.addEventListener("click", async e=>{
+  if(e.target.classList.contains("btn-delete")){
+    const card = e.target.closest(".card"); if(!card) return;
+    const id = card.dataset.id;
+    if(confirm(`¿Eliminar pedido #${id}?`)){
+      try{ await apiDeleteRow(id); ALL_ORDERS = ALL_ORDERS.filter(o=>String(o.row_id)!==String(id)); applyFilters(); applySort(); render(); }
+      catch{ alert("No se pudo eliminar el pedido."); }
+    }
+  }
+  if(e.target.classList.contains("btn-edit")){
+    const card = e.target.closest(".card"); if(!card) return; openEditor(card.dataset.id);
+  }
+});
+
+/* Editor */
+const modalBackdrop = document.getElementById("modalBackdrop");
+const ed = {
+  coordinator: edCoordinator, phone: edPhone, state: edState, address: edAddress,
+  S: edS, M: edM, L: edL, XL: edXL, XXL: edXXL, XXXL: edXXXL,
+  price: edPrice, totalCalc: edTotalCalc,
+};
+function openEditor(id){
+  const o = ALL_ORDERS.find(x=>String(x.row_id)===String(id)); if(!o) return;
+  editingId = id;
+  ed.coordinator.value = o.coordinator||""; ed.phone.value = o.phone||"";
+  ed.state.value = o.state||"California"; ed.address.value = o.address||"";
+  ed.S.value=+o.S||0; ed.M.value=+o.M||0; ed.L.value=+o.L||0; ed.XL.value=+o.XL||0; ed.XXL.value=+o.XXL||0; ed.XXXL.value=+o.XXXL||0;
+  ed.price.value = (o.price_per_shirt!=null? o.price_per_shirt : 30);
+  recalcEditorTotal(); modalBackdrop.style.display="flex";
+}
+function closeEditor(){ modalBackdrop.style.display="none"; editingId=null; }
+function recalcEditorTotal(){
+  const S=+ed.S.value||0,M=+ed.M.value||0,L=+ed.L.value||0,XL=+ed.XL.value||0,XXL=+ed.XXL.value||0,XXXL=+ed.XXXL.value||0;
+  const total=S+M+L+XL+XXL+XXXL, p=+(ed.price.value||0);
+  ed.totalCalc.value = `${total} camisas — ${money(total*p)}`;
+}
+["edS","edM","edL","edXL","edXXL","edXXXL","edPrice"].forEach(id=> document.getElementById(id).addEventListener("input", recalcEditorTotal));
+btnCancel.onclick = closeEditor;
+modalBackdrop.addEventListener("click", e=>{ if(e.target===modalBackdrop) closeEditor(); });
+btnSave.onclick = async ()=>{
+  if(!editingId) return;
+  const patch = {
+    coordinator: ed.coordinator.value.trim(), phone: ed.phone.value.trim(),
+    state: ed.state.value, address: ed.address.value.trim(),
+    S:+ed.S.value||0, M:+ed.M.value||0, L:+ed.L.value||0, XL:+ed.XL.value||0, XXL:+ed.XXL.value||0, XXXL:+ed.XXXL.value||0,
+    price_per_shirt:+(ed.price.value||0)
+  };
+  patch.total = patch.S+patch.M+patch.L+patch.XL+patch.XXL+patch.XXXL;
+  patch.total_cost = patch.total * patch.price_per_shirt;
+  try{
+    await apiPatchRow(editingId, patch);
+    const idx = ALL_ORDERS.findIndex(o=>String(o.row_id)===String(editingId));
+    if(idx>=0) Object.assign(ALL_ORDERS[idx], patch);
+    closeEditor(); applyFilters(); applySort(); render();
+  }catch(err){ alert("No se pudo guardar los cambios."); console.error(err); }
+};
+
+/* Init */
+if(getPw()===GATE_PASSWORD){ setUI(true); refresh().catch(()=>{}); }
+</script>
+</body>
+</html>
